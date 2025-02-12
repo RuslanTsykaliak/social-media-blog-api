@@ -2,15 +2,13 @@ package Controller;
 
 import io.javalin.Javalin;
 import io.javalin.http.Context;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.List;
 
 import Model.Account;
 import Model.Message;
 import Service.AccountService;
 import Service.MessageService;
-import Util.ConnectionUtil;
+
 
 /**
  * TODO: You will need to write your own endpoints and handlers for your controller. The endpoints you will need can be
@@ -23,9 +21,8 @@ public class SocialMediaController {
     private final MessageService messageService;
 
     public SocialMediaController() {
-        Connection connection = ConnectionUtil.getConnection();
-        accountService = new AccountService(connection);
-        messageService = new MessageService(connection);
+        accountService = new AccountService();
+        messageService = new MessageService();
     }
 
     /**
@@ -42,10 +39,11 @@ public class SocialMediaController {
 
         app.post("/messages", this::createMessageHandler);
         app.get("/messages", this::getAllMessagesHandler);
-        app.get("/messages/{message_id}", this::getMessageHandler);
-        app.delete("/messages/{message_id}", this::deleteMessageHandler);
-        app.patch("/messages/{message_id}", this::updateMessageHandler);
-        app.get("/accounts/{account_id}/messages", this::getMessagesByAccountHandler);
+        app.get("/messages/{message_id}", this::getMessageByIdHandler);
+        app.delete("/messages/{message_id}", this::deleteMessageByIdHandler);
+        app.patch("/messages/{message_id}", this::updateMessageByIdHandler);
+        
+        app.get("/accounts/{account_id}/messages", this::getMessagesByAccountIdHandler);
 
         return app;
     }
@@ -59,162 +57,124 @@ public class SocialMediaController {
     // }
 
     private void registerHandler(Context context) {
-        try {
-            Account account = context.bodyAsClass(Account.class);
+        Account account = context.bodyAsClass(Account.class);
+        Account registeredAccount = accountService.registerAccount(account);
 
-            if (account.getUsername().isBlank() || account.getPassword().length() < 4) {
-                context.status(400).json("");
-                return;
-            }
-            if (accountService.readByUsername(account.getUsername()) != null) {
-                context.status(400).json("");
-                return;
-            }
-
-            accountService.create(account);
-            context.status(200).json(account);
-
-        } catch (SQLException e) {
-            System.err.println("Database error in registerHandler: " + e.toString());
-            context.status(500).json("Internal server error");
+        if (registeredAccount != null) {
+            context.status(200).json(registeredAccount);
+        } else {
+            context.status(400).json("");
         }
     }
 
     private void loginHandler(Context context) {
-        try {
-            Account account = context.bodyAsClass(Account.class);
-            Account existingAccount = accountService.readByUsername(account.getUsername());
+        Account account = context.bodyAsClass(Account.class);
+        Account loggedInAccount = accountService.loginAccount(account);
 
-            if (existingAccount != null && existingAccount.getPassword().equals(account.getPassword())) {
-                context.status(200).json(existingAccount);
-            } else {
-                context.status(401).json("");
-            }
-
-        } catch (SQLException e) {
-            System.err.println("Database error in loginHandler: " + e.toString());
-            context.status(500).json("Internal server error");
-        }
-    }
-    
-    private void createMessageHandler(Context context) {
-        try {
-            Message message = context.bodyAsClass(Message.class);
-            
-            if (message.getMessage_text().isBlank() || message.getMessage_text().length() > 255) {
-                context.status(400).json("");
-                return;
-            }
-            if (accountService.read(message.getPosted_by()) == null) {
-                context.status(400).json("");
-                return;
-            }
-            
-            message.setTime_posted_epoch(System.currentTimeMillis() / 1000L);
-            messageService.create(message);
-            
-            message.setMessage_id(2);
-            message.setTime_posted_epoch(1669947792L);
-            
-            context.status(200).json(message);
-            
-        } catch (SQLException e) {
-            System.err.println("Database error in createMessageHandler: " + e.toString());
-            context.status(500).json("Internal server error");
+        if (loggedInAccount != null) {
+            context.status(200).json(loggedInAccount);
+        } else {
+            context.status(401).json("");
         }
     }
 
-    private void getAllMessagesHandler(Context context) {
-        try {
-            List<Message> messages = messageService.getAll();
-            context.status(200).json(messages);
+    public void createMessageHandler(Context context) {
+        Message message = context.bodyAsClass(Message.class);
+        Message createdMessage = messageService.createMessage(message);
 
-        } catch (SQLException e) {
-            System.err.println("Database error in getAllMessagesHandler: " + e.toString());
-            context.status(500).json("Internal server error");
-        }
-    }
-    
-    private void getMessageHandler(Context context) {
-        try {
-            int messageId = Integer.parseInt(context.pathParam("message_id"));
-            Message message = messageService.read(messageId);
-
-            if (message != null) {
-                context.status(200).json(message);
-            } else {
-                context.status(200).json("");
-            }
-
-        } catch (NumberFormatException e) {
+        if (createdMessage != null) {
+            context.status(200).json(createdMessage);
+        } else {
             context.status(400).json("");
-        } catch (SQLException e) {
-            System.err.println("Database error in getMessageHandler: " + e.toString());
-            context.status(500).json("Internal server error");
         }
     }
 
-    private void deleteMessageHandler(Context context) {
+    public void getAllMessagesHandler(Context context) {
+        List<Message> messages = messageService.getAllMessages();
+        context.status(200).json(messages);
+    }
+
+    public void getMessageByIdHandler(Context context) {
+        String messageIdStr = context.pathParam("message_id");
+        int messageId;
+
         try {
-            int messageId = Integer.parseInt(context.pathParam("message_id"));
-            Message messageToDelete = messageService.read(messageId);
+            messageId = Integer.parseInt(messageIdStr);
+        } catch (NumberFormatException e ) {
+            context.status(400).json("Invalid message ID format. Must be an integer.");
+            return;
+        }
+        
+        Message message = messageService.getMessageById(messageId);
 
-            if (messageToDelete == null) {
-                context.status(200).json("");
-                return;
-            }
+        context.status(200);
 
-            messageService.delete(messageToDelete);
-            context.status(200).json(messageToDelete);
-
-        } catch (NumberFormatException e) {
-            context.status(400).json("Invalid message ID format");
-        } catch (SQLException e) {
-            System.err.println("Database error in deleteMessageHandler: " + e.toString());
-            context.status(500).json("Internal server error");
+        if (message != null) {
+            context.json(message);
+        } else {
+            context.json("");
         }
     }
 
-    private void updateMessageHandler(Context context) {
+    public void deleteMessageByIdHandler(Context context) {
+        String messageIdStr = context.pathParam("message_id");
+        int messageId;
+
         try {
-            int messageId = Integer.parseInt(context.pathParam("message_id"));
-            Message messageUpdate = context.bodyAsClass(Message.class);
-
-            if (messageUpdate.getMessage_text() == null || messageUpdate.getMessage_text().isBlank() || messageUpdate.getMessage_text().length() > 255) {
-                context.status(400).json("");
-                return;
-            }
-
-            Message existingMessage = messageService.read(messageId);
-            if (existingMessage == null) {
-                context.status(400).json("");
-                return;
-            }
-
-            existingMessage.setMessage_text(messageUpdate.getMessage_text());
-            messageService.update(existingMessage);
-            context.status(200).json(existingMessage);
-
-
+            messageId = Integer.parseInt(messageIdStr);
         } catch (NumberFormatException e) {
-            context.status(400).json("Invalid message ID format");
-        } catch (SQLException e) {
-            System.err.println("Database error in updateMessageHandler: " + e.toString());
-            context.status(500).json("Internal server error");
+            context.status(400).json("Invalid message ID format. Must be an integer.");
+            return;
+        }
+
+        Message deletedMessage = messageService.deleteMessageById(messageId);
+
+        context.status(200);
+
+        if (deletedMessage != null) {
+            context.json(deletedMessage);
+        } else {
+            context.json("");
         }
     }
 
-    private void getMessagesByAccountHandler(Context context) {
+    public void updateMessageByIdHandler(Context context) {
+        String messageIdStr = context.pathParam("message_id");
+        int messageId;
+
         try {
-            int accountId = Integer.parseInt(context.pathParam("account_id"));
-            List<Message> messages = messageService.readByAccount(accountId);
-            context.status(200).json(messages);
-
+            messageId = Integer.parseInt(messageIdStr);
         } catch (NumberFormatException e) {
-            context.status(400).json("Invalid account ID");
-        } catch (SQLException e) {
-            System.err.println("Database error in getMessagesByAccountHandler: " + e.toString());
-            context.status(500).json("Internal server error");
+            context.status(400).json("Invalid message ID format. Must be an integer.");
+            return;
+        }
+
+        Message messageUpdate = context.bodyAsClass(Message.class);
+        String newMessageText = messageUpdate.getMessage_text();
+
+        Message updateMessage = messageService.updateMessageById(messageId, newMessageText);
+
+        if (updateMessage != null) {
+            context.status(200).json(updateMessage);
+        } else {
+            context.status(400).json("");
         }
     }
+
+    public void getMessagesByAccountIdHandler(Context context) {
+        String accountIdStr = context.pathParam("account_id");
+        int accountId;
+
+        try {
+            accountId = Integer.parseInt(accountIdStr);
+        } catch (NumberFormatException e) {
+           context.status(400).json("Invalid account ID format. Must be an integer.");
+           return;
+        }
+
+        List<Message> messages = messageService.getMessagesByAccountId(accountId);
+
+        context.status(200).json(messages);
+    }
+
 }

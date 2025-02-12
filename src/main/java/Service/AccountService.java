@@ -3,49 +3,40 @@ package Service;
 import DAO.AccountDAO;
 import Model.Account;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.List;
-
 
 public class AccountService {
 
-    private final AccountDAO accountDAO;
+    AccountDAO accountDAO = new AccountDAO();
 
-    public AccountService(Connection connection) {
-        this.accountDAO = new AccountDAO(connection);
-    }
-
-    public void create(Account account) throws SQLException {
+    public Account registerAccount(Account account) {
         if (account == null) {
-            throw new IllegalArgumentException("Account cannot be null");
+            return null;
         }
-        accountDAO.create(account);
-    }
-
-    public Account read(int accountId) throws SQLException {
-        return accountDAO.read(accountId);
-    }
-
-    public Account readByUsername(String username) throws SQLException {
-        return accountDAO.readByUsername(username);
-    }
-
-    public void update(Account account) throws SQLException {
-        if (account == null || account.getAccount_id() <= 0) {
-            throw new IllegalArgumentException("Invalid account object for update");
+        if (
+            account.getUsername() == null || account.getUsername().isBlank() ||
+            account.getPassword() == null || account.getPassword().length() < 4
+            ) {
+                return null;
+            }
+        if (accountDAO.getAccountByUsername(account.getUsername()) != null) {
+            return null;
         }
-        accountDAO.update(account);
+
+        return accountDAO.createAccount(account);
     }
 
-    public void delete(Account account) throws SQLException {
-        if (account == null || account.getAccount_id() <= 0) {
-            throw new IllegalArgumentException("Invalid account object for deletion");
+    public Account loginAccount(Account account) {
+        if (account == null || account.getUsername() == null || account.getPassword() == null) {
+            return null;
         }
-        accountDAO.delete(account);
+
+        Account existingAccount = accountDAO.getAccountByUsername(account.getUsername());
+
+        if (existingAccount != null && existingAccount.getPassword().equals(account.getPassword())) {
+            return existingAccount;
+        } else {
+            return null;
+        }
     }
 
-    public List<Account> getAll() throws SQLException {
-        return accountDAO.getAll();
-    }
 }

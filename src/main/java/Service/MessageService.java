@@ -3,55 +3,57 @@ package Service;
 import DAO.MessageDAO;
 import Model.Message;
 
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 
 
 public class MessageService {
 
-    private final MessageDAO messageDAO;
+    MessageDAO messageDAO = new MessageDAO();
 
-    public MessageService(Connection connection) {
-        this.messageDAO = new MessageDAO(connection);
-    }
-
-    public void create(Message message) throws SQLException {
-        if (message == null || message.getMessage_text() == null || message.getMessage_text().isBlank() || message.getMessage_text().length() > 255) {
-            throw new IllegalArgumentException("Invalid message: Text must be between 1 and 255 characters.");
+    public Message createMessage(Message message) {
+        if (message == null || message.getMessage_text() == null || message.getMessage_text().isBlank()) {
+            return null;
         }
-        if (message.getPosted_by() <= 0) {
-            throw new IllegalArgumentException("Invalid message: Posted_by account ID is not valid.");
+
+        return messageDAO.createMessage(message);
+    }
+
+    public List<Message> getAllMessages() {
+        return messageDAO.getAllMessages();
+    }
+
+    public Message getMessageById(int messageId) {
+        if (messageId <= 0) {
+            return null;
         }
-        messageDAO.create(message);
+        return messageDAO.getMessageById(messageId);
     }
 
-    public Message read(int messageId) throws SQLException {
-        return messageDAO.read(messageId);
-    }
-
-    public void update(Message message) throws SQLException {
-        if (message == null || message.getMessage_id() <= 0 || message.getMessage_text() == null || message.getMessage_text().isBlank() || message.getMessage_text().length() > 255) {
-            throw new IllegalArgumentException("Invalid message for update: Text must be between 1 and 255 characters and message ID must be valid.");
+    public Message deleteMessageById(int messageId) {
+        if (messageId <= 0) {
+            return null;
         }
-        messageDAO.update(message);
+        return messageDAO.deleteMessageById(messageId);
     }
 
-    public void delete(Message message) throws SQLException {
-        if (message == null || message.getMessage_id() <= 0) {
-            throw new IllegalArgumentException("Invalid message for deletion: Message ID must be valid.");
+    public Message updateMessageById(int messageId, String messageText) {
+        if (
+            messageId <= 0 || 
+            messageText == null || 
+            messageText.isBlank() || 
+            messageText.length() > 255
+        ) {
+            return null;
         }
-        messageDAO.delete(message);
+        return messageDAO.updateMessageById(messageId, messageText);
     }
 
-    public List<Message> getAll() throws SQLException {
-        return messageDAO.getAll();
-    }
-
-    public List<Message> readByAccount(int accountId) throws SQLException {
+    public List<Message> getMessagesByAccountId(int accountId) {
         if (accountId <= 0) {
-            throw new IllegalArgumentException("Invalid account ID for retrieving messages.");
+            return new ArrayList<>();
         }
-        return messageDAO.readByAccount(accountId);
+        return messageDAO.getMessagesByAccountId(accountId);
     }
+
 }
